@@ -1,0 +1,384 @@
+---
+title: "Calibrating Snow Gauge"
+author: "Iza"
+date: "3/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## the data
+```{r}
+Density = c(0.686,0.604,0.508,0.412,
+            0.318,0.223,0.148,0.080,0.001)
+
+Gain1 = c(17.6,24.8,39.4,60.0,
+          87.0,128,199,298,423)
+Gain2 = c(17.3,25.9,37.6,58.3,
+          92.7,130,204,298,421)
+Gain3 = c(16.9,26.3,38.1,59.6,
+          90.5,131,199,297,422)
+Gain4 = c(16.2,24.8,37.7,59.1,
+          85.8,129,207,288,428)
+Gain5 = c(17.1,24.8,36.3,56.3,
+          87.5,127,200,296,436)
+Gain6 = c(18.5,27.6,38.7,55.0,
+          88.3,129,200,293,427)
+Gain7 = c(18.7,28.5,39.4,52.9,
+          91.6,132,205,301,426)
+Gain8 = c(17.4,30.5,38.8,54.1,
+          88.2,133,202,299,428)
+Gain9 = c(18.6,28.4,39.2,56.9,
+          88.6,134,199,298,427)
+Gain10 = c(16.8,27.7,40.3,56.0,
+           84.7,133,199,293,429)
+
+#df with only two columns
+df1 = data.frame(
+  rep(Density,10),
+  c(Gain1,Gain2,Gain3,Gain4,Gain5,
+    Gain6,Gain7,Gain8,Gain9,Gain10))
+#chage column names
+names(df1) = c("Density","Gain")
+
+```
+
+## How are density and gain related?
+```{r}
+library(ggplot2)
+
+dxg = ggplot(df1,aes(x=Density, y =Gain))
+dxg_df1 = dxg + ggtitle("Point Plot each Polyethylene Density and its 10 Gains reading") + geom_point(aes(colour = factor(Density)))
+```
+
+# Relationship of Gain and Density
+$Gain = e^{b*Density}$ or $ln(Gain) = b*Density$
+
+
+# model 0: just a linear 
+```{r}
+model0 = lm(Gain~Density, data=df1)
+summary(model0)
+coefs1 = model0$coefficients
+plot(model0)
+```
+
+
+
+# Model fitting using trasformation and linear regression
+In order to use "lm()" we have to make the relationship between the two variables to be linear. Hence the log transformation of the Gain variable.
+```{r}
+model1 = lm(log(Gain)~Density, data=df1)
+summary(model1)
+coefs1 = model1$coefficients
+plot(model1)
+```
+
+# the physical model representin
+$$Gain = e^{b*Density}$$
+$$log(Gain) = b*Density$$
+using the data, the model with coefficients is
+$$log(Gain) = b*Density + a + \epsilon$$
+
+,where $b = -4.60594$ and $a = 5.99727$. 
+
+If apply exponent
+$$Gain = e^{b*Density + a} = e^{b*Density} *e^{a}$$
+
+# Predict the Density using the models
+
+
+```{r}
+# without error term
+# predict Gains using model1
+#G.pred1 = exp(predict(model1, df1, level=0.95, interval="confidence"))
+
+# but we want density, inverse estimating... using the equation of the model
+D.pred1 = (log(df1$Gain) - model1$coefficients[1]) /  model1$coefficients[2]
+# notice that they give the same point estimates of density
+
+num = (D.pred1 - mean(df1$Gain))^2
+denom = sum((df1$Gain - mean(df1$Gain))^2)
+
+n = nrow(df1)
+s.hat = 0.06792 # is this value right?
+lowerb = D.pred1-(qnorm(0.975)*s.hat*sqrt((1/n) + num/denom))
+upperb = D.pred1+(qnorm(0.975)*s.hat*sqrt((1/n) + num/denom))
+
+lowerb < df1$Density & df1$Density < upperb
+table(lowerb < df1$Density & df1$Density < upperb)
+
+
+D.pred1.pt = (log(df1$Gain) - model1$coefficients[1] - model1$residuals) /  model1$coefficients[2]
+lowerb.pt = D.pred1.pt - (qnorm(0.975)*s.hat*sqrt((1/n) + num/denom))
+upperb.pt = D.pred1.pt + (qnorm(0.975)*s.hat*sqrt((1/n) + num/denom))
+table(lowerb.pt < df1$Density & df1$Density < upperb.pt)
+# with error term, all the interval estimates encompass all obs. densities
+
+```
+
+
+
+#plotting model1
+$$Gain = c* e^{b*Density},$$
+where $c = e^{a}$, $b = -4.60594$ and $a = 5.99727$.
+\
+```{r}
+
+func = function(x){
+  exp(model1$coefficients[2]*x)*exp(model1$coefficients[1])
+}
+dxg_df1
+dxg_df1 + geom_function(fun =func) 
+```
+
+
+
+# modelling without extreme cases
+
+## model2 - same as model1 but 0.001 density data removed from training set
+```{r}
+df2 = subset(df1, Density!= 0.001)
+#model without 0.001
+model2.l = lm(log(Gain)~Density, data=df2)
+summary(model2.l)
+coefs2.l = model2.l$coefficients
+#plot(model2.l)
+
+# but we want density
+D.pred2.l = (log(df2$Gain) - model2.l$coefficients[1]) /  model2.l$coefficients[2]
+# notice that they give the same point estimates of density
+
+num2.l = (D.pred2.l - mean(df2$Gain))^2
+denom2.l = sum((df2$Gain - mean(df2$Gain))^2)
+
+n2.l = nrow(df2)
+s.hat2.l = 0.0694 # is this value right?
+lowerb2.l = D.pred2.l-(qnorm(0.975)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+upperb2.l = D.pred2.l+(qnorm(0.975)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+
+#check if observed density is within the interval
+table(lowerb2.l < df2$Density & df2$Density < upperb2.l)
+
+
+#predicting point est of density with error term
+D.pred2.l.pt = (log(df2$Gain) - model2.b$coefficients[1] - model2.l$residuals) /  model2.b$coefficients[2]
+lowerb2.l.pt = D.pred2.l.pt-(qnorm(0.975)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+upperb2.l.pt = D.pred2.l.pt+(qnorm(0.975)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+
+table(lowerb2.l.pt < df2$Density & df2$Density < upperb2.l.pt)
+
+# with error term, all the interval estimates encompass all obs. densities
+
+```
+#model3 - same techniques as model1 but with 0.686 density data removed from training set
+```{r}
+df3 = subset(df1,  Density!= 0.686)
+#model without 0.686
+model2.u = lm(log(Gain)~Density, data=df3)
+summary(model2.u)
+coefs2.u = model2.u$coefficients
+#plot(model2.u)
+
+# but we want density
+D.pred2.u = (log(df3$Gain) - model2.u$coefficients[1]) /  model2.u$coefficients[2]
+# notice that they give the same point estimates of density
+
+num2.u = (D.pred2.u - mean(df3$Gain))^2
+denom2.u = sum((df3$Gain - mean(df3$Gain))^2)
+n2.u = nrow(df3)
+s.hat2.u = 0.06633 # is this value right?
+lowerb2.u = D.pred2.u-(qnorm(0.975, nrow(df3)-2)*s.hat2.u*sqrt(1+ (1/n2.u) + num2.u/denom2.u))
+upperb2.u = D.pred2.u+(qnorm(0.975, nrow(df3)-2)*s.hat2.u*sqrt(1+(1/n2.u) + num2.u/denom2.u))
+
+lowerb2.u < df3$Density & df3$Density < upperb2.u
+table(lowerb2.u < df3$Density & df3$Density < upperb2.u)
+
+#predicting density with error term
+D.pred2.u.pt=(log(df3$Gain) - model2.b$coefficients[1] - model2.u$residuals) /  model2.b$coefficients[2]
+lowerb2.u.pt = D.pred2.u.pt-(qt(0.975, nrow(df3)-2)*s.hat2.u*sqrt(1+(1/n2.u) + num2.u/denom2.u))
+upperb2.u.pt = D.pred2.u.pt+(qt(0.975, nrow(df3)-2)*s.hat2.u*sqrt(1+(1/n2.u) + num2.u/denom2.u))
+table(lowerb2.u.pt < df3$Density & df3$Density < upperb2.u.pt)
+# with error term, all the interval estimates encompass all obs. densities
+
+```
+
+#model4 - same techniques as model1 but both 0.001 0.686 density data removed from training set
+```{r}
+df4 = subset(df1,  Density>0.001 & Density<0.686)
+
+#model without 0.686 and 0.001
+model2.b = lm(log(Gain)~Density, data=df4)
+summary(model2.b)
+coefs2.b = model2.b$coefficients
+#plot(model2.b)
+
+# but we want density
+D.pred2.b = (log(df4$Gain) - model2.b$coefficients[1]) /  model2.b$coefficients[2]
+
+
+
+num2.b = (D.pred2.b - mean(df4$Gain))^2
+denom2.b = sum((df4$Gain - mean(df4$Gain))^2)
+n2.b = nrow(df4)
+s.hat2.b = 0.06868 # is this value right?
+lowerb2.b = D.pred2.b-(qt(0.975,df = nrow(df4)-2)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+upperb2.b = D.pred2.b+(qt(0.975, df = nrow(df4)-2)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+
+lowerb2.b < df4$Density & df4$Density < upperb2.b
+table(lowerb2.b < df4$Density & df4$Density < upperb2.b)
+
+#predicting density with error term
+D.pred2.b.pt = (log(df4$Gain) - model2.b$coefficients[1] - model2.b$residuals) /  model2.b$coefficients[2]
+lowerb2.b.pt = D.pred2.b.pt-(qnorm(0.975)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+upperb2.b.pt = D.pred2.b.pt+(qnorm(0.975)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+table(lowerb2.b.pt < df4$Density & df4$Density < upperb2.b.pt)
+# with error term, all the interval estimates encompass all obs. densities
+
+```
+
+# error
+truth = reported value + measurement error
+```{r}
+e= model1$residuals
+qqnorm(e)
+qqline(e)
+shapiro.test(e)
+# residuals are normally distributed
+df1$Density 
+```
+# confidence interval of Density estimate by model
+```{r}
+# function to find lower and upper bounds for a model
+CI = function(model, alpha){
+  if(model == 1){
+    num = (D.pred1 - mean(df1$Gain))^2
+    denom = sum((df1$Gain - mean(df1$Gain))^2)
+    n = nrow(df1)
+    s.hat = 0.06792 # is this value right?
+    lowerb = D.pred1-(qnorm(1-(alpha/2))*s.hat*sqrt((1/n) + num/denom))
+    upperb = D.pred1+(qnorm(1-(alpha/2))*s.hat*sqrt((1/n) + num/denom))
+  }
+  else if(model==2){
+    num2.l = (D.pred2.l - mean(df2$Gain))^2
+    denom2.l = sum((df2$Gain - mean(df2$Gain))^2)
+    n2.l = nrow(df2)
+    s.hat2.l = 0.0694 # is this value right?
+    lowerb = D.pred2.l-(qnorm(alpha/2)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+    upperb = D.pred2.l+(qnorm(alpha/2)*s.hat2.l*sqrt((1/n2.l) + num2.l/denom2.l))
+  }
+  else if(model==3){
+    num2.u = (D.pred2.u - mean(df3$Gain))^2
+    denom2.u = sum((df3$Gain - mean(df3$Gain))^2)
+    n2.u = nrow(df3)
+    s.hat2.u = 0.06633 # is this value right?
+    lowerb = D.pred2.u-(qnorm(alpha/2)*s.hat2.u*sqrt((1/n2.u) + num2.u/denom2.u))
+    upperb = D.pred2.u+(qnorm(alpha/2)*s.hat2.u*sqrt((1/n2.u) + num2.u/denom2.u))
+  }
+  else if(model==4){
+    num2.b = (D.pred2.b - mean(df4$Gain))^2
+    denom2.b = sum((df4$Gain - mean(df4$Gain))^2)
+    n2.b = nrow(df4)
+    s.hat2.b = 0.06868 # is this value right?
+    lowerb = D.pred2.b-(qnorm(alpha/2)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+    upperb = D.pred2.b+(qnorm(alpha/2)*s.hat2.b*sqrt((1/n2.b) + num2.b/denom2.b))
+  }
+  else{
+    print("model not found...")
+    lowerb = NA
+    upperb = NA
+  }
+  return(as.data.frame(cbind(lowerb,upperb)))
+}
+
+# 95% confidence interval of model1
+CI(1,0.05)
+
+# 95% confidence interval of model2.l 
+# note: model2.l has log(Gain) as y and Density as x; data with low density:0.001 is removed 
+CI(2,0.05)
+
+# 95% confidence interval of model2.u
+# note: model2.u has log(Gain) as y and Density as x; data with high density:0.686 is removed 
+CI(3,0.05)
+
+# 95% confidence interval of model2.b
+# note: model2.b has log(Gain) as y and Density as x; both low density:0.001 and 0.686 are removed 
+CI(4,0.05)
+```
+
+# Given a gain, what is it's estimated density and its interval, depending on the model used?
+```{r}
+estimateDensity = function(gain, model, alpha){
+  if(model==1){
+    pointEstimate = (log(gain) - model1$coefficients[1]) /  model1$coefficients[2]
+    num = (pointEstimate - mean(df1$Gain))^2
+    denom = sum((df1$Gain - mean(df1$Gain))^2)
+    n = nrow(df1)
+    s.hat = 0.06792 # is this value right?
+    ci = pointEstimate + c(-1,1)*(qt(1-(alpha/2), nrow(df1)-2)*s.hat*sqrt(1+ (1/n) + num/denom))
+  }
+  else if(model==2){
+    pointEstimate = (log(gain) - model2.l$coefficients[1]) /  model2.l$coefficients[2]
+    num2.l = (pointEstimate - mean(df2$Gain))^2
+    denom2.l = sum((df2$Gain - mean(df2$Gain))^2)
+    n2.l = nrow(df2)
+    s.hat2.l = 0.0694 # is this value right?
+    ci = pointEstimate + c(-1,1)*(qt(1-(alpha/2), nrow(df2)-2)*s.hat2.l*sqrt(1+ (1/n2.l) + num2.l/denom2.l))
+    
+  }
+  else if(model==3){
+    pointEstimate = (log(gain) - model2.u$coefficients[1]) /  model2.u$coefficients[2]
+    num2.u = (pointEstimate - mean(df3$Gain))^2
+    denom2.u = sum((df3$Gain - mean(df3$Gain))^2)
+    n2.u = nrow(df3)
+    s.hat2.u = 0.06633 # is this value right?
+    ci = pointEstimate + c(-1,1)*(qt(1-(alpha/2), nrow(df3)-2)*s.hat2.u*sqrt(1+ (1/n2.u) + num2.u/denom2.u))
+  }
+  else if(model==4){
+    pointEstimate = (log(gain) - model2.b$coefficients[1]) /  model2.b$coefficients[2]
+    num2.b = (pointEstimate - mean(df4$Gain))^2
+    denom2.b = sum((df4$Gain - mean(df4$Gain))^2)
+    n2.b = nrow(df4)
+    s.hat2.b = 0.06868 # is this value right?
+    ci = pointEstimate + c(-1,1)*(qt(1-(alpha/2), nrow(df4)-2)*s.hat2.b*sqrt(1+(1/n2.b) + num2.b/denom2.b))
+    
+  }
+  else{
+    print("model not found...")
+    pointEstimate = NA
+    ci = NA
+  }
+  
+  df = data.frame(cbind(
+    rep(c("point estimate ", "lowerb","upperb"),length(gain)),
+    c(pointEstimate, ci)))
+  names(df) = c("label", "value")
+  return(df)
+}
+```
+
+
+/plot the conf intervals for each model
+
+```{r}
+# put model type: 1,2,3,4, gains, fit.value of density and their, se.fit. in a df then add on the plot
+
+m1 = rep(1, length(D.pred1))
+m2 = rep(2, length(D.pred2.l))
+m3 = rep(3, length(D.pred2.u))
+m4 = rep(4, length(D.pred2.b))
+model = c(m1,m2,m3,m4)
+p.estimates = c(D.pred1, D.pred2.l, D.pred2.u, D.pred2.b)
+est.df = data.frame(model,p.estimates)
+
+func = function(x){
+  exp(model1$coefficients[2]*x)*exp(model1$coefficients[1])
+}
+dxg_df1
+dxg_df1 + geom_function(fun =func) 
+```
+
+
