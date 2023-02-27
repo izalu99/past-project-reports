@@ -40,7 +40,7 @@ library(Metrics)
 
 ```{r, echo=FALSE}
 # import the banana data
-bdata = readxl::read_xlsx("C:\\Users\\Owner\\OneDrive - University of Calgary\\STAT 517\\Project1\\Copy of Banana Data.xlsx")
+bdata = readxl::read_xlsx("Copy of Banana Data.xlsx")
 
 colnames(bdata) = c("weight","length","radius")
 
@@ -387,8 +387,7 @@ The following are the R codes used for this report.
 ```{r, linewidth=60}
 # import the banana data
 #bdata = readxl::read_xlsx(
-#"C:\\Users\\Owner\\OneDrive - 
-#University of Calgary\\STAT 517\\Project1\\Copy of Banana Data.xlsx")
+#"Banana Data.xlsx")
 
 #colnames(bdata) = c("weight","length","radius")
 
